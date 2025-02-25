@@ -1,4 +1,8 @@
+from fastapi.testclient import TestClient
+from app.main import app
 import requests
+
+client = TestClient(app)
 
 def test_ingest_endpoint():
     url = 'http://localhost:8000/ingest'  
