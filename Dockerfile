@@ -12,15 +12,15 @@ RUN apt-get update && \
     build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias de Python
+# Copiar solo requirements.txt primero para cachear dependencias
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copiar código
+# Copiar el resto del código
 COPY . .
 
-# Inicializar BBDD
+# Inicializar BBDD (ahora main.py ya está copiado)
 RUN python -c "from main import init_db; init_db()"
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
