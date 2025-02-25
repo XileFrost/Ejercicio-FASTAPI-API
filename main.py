@@ -11,7 +11,7 @@ app = FastAPI()
 
 # Configuración
 DATABASE_NAME = "advertising.db"
-CSV_PATH = "./data/Advertising.csv"
+CSV_PATH = "/app/data/Advertising.csv"  # Ruta absoluta en Docker
 
 # Cargar modelo inicial
 with open("./data/advertising_model.pkl", "rb") as model_file:
@@ -21,7 +21,7 @@ with open("./data/advertising_model.pkl", "rb") as model_file:
 def get_db():
     return sqlite3.connect(DATABASE_NAME)
 
-# Inicializar base de datos
+# Inicializar base de datos (corregido para 'newpaper')
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
@@ -31,15 +31,20 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tv REAL NOT NULL,
             radio REAL NOT NULL,
-            newspaper REAL NOT NULL,
+            newspaper REAL NOT NULL,  # Nombre correcto en DB
             sales REAL NOT NULL
         )
     ''')
     
     if cursor.execute("SELECT COUNT(*) FROM advertising").fetchone()[0] == 0:
+        # Leo CSV y cambio nombre de columna
         df = pd.read_csv(CSV_PATH)
+        df = df.rename(columns={'newpaper': 'newspaper'}) 
+        
+        # Limpio dato erróneo (6s9.2 → 69.2)
         df['newspaper'] = df['newspaper'].astype(str).str.replace('s', '').astype(float)
         
+        # Insertar datos
         df[['tv', 'radio', 'newspaper', 'sales']].to_sql(
             'advertising',
             conn,
@@ -53,27 +58,36 @@ def init_db():
 init_db()
 
 # Modelos Pydantic
-class IngestRequest(BaseModel):
-    data: list[list[float]]
+class PredictionInput(BaseModel):
+    tv: float
+    radio: float
+    newspaper: float
 
-class PredictRequest(BaseModel):
-    data: list[list[float]]
+class TrainingData(BaseModel):
+    tv: float
+    radio: float
+    newspaper: float
+    sales: float
 
-# Endpoints
+# Endpoints (igual que antes)
+@app.post("/predict")
+async def predict(data: PredictionInput):
+    try:
+        input_data = np.array([[data.tv, data.radio, data.newspaper]])
+        prediction = model.predict(input_data)
+        return {"prediction": round(float(prediction[0]), 2)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/ingest")
-async def ingest_data(request: IngestRequest):
+async def ingest_data(data: TrainingData):
     conn = get_db()
     cursor = conn.cursor()
     try:
-        for entry in request.data:
-            if len(entry) != 4:
-                raise HTTPException(status_code=400, detail="Formato incorrecto")
-                
-            cursor.execute('''
-                INSERT INTO advertising (tv, radio, newspaper, sales)
-                VALUES (?, ?, ?, ?)
-            ''', tuple(entry))
-        
+        cursor.execute('''
+            INSERT INTO advertising (tv, radio, newspaper, sales)
+            VALUES (?, ?, ?, ?)
+        ''', (data.tv, data.radio, data.newspaper, data.sales))
         conn.commit()
         return {"message": "Datos ingresados correctamente"}
     except Exception as e:
@@ -82,23 +96,11 @@ async def ingest_data(request: IngestRequest):
     finally:
         conn.close()
 
-@app.post("/predict")
-async def predict(request: PredictRequest):
-    try:
-        input_data = np.array(request.data)
-        predictions = model.predict(input_data)
-        return {"prediction": [round(float(p), 2) for p in predictions]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/retrain")
 async def retrain_model():
     conn = get_db()
     try:
         df = pd.read_sql('SELECT tv, radio, newspaper, sales FROM advertising', conn)
-        
-        if len(df) < 1:
-            return {"message": "No hay datos para reentrenar"}
         
         X = df[['tv', 'radio', 'newspaper']]
         y = df['sales']
@@ -118,6 +120,5 @@ async def retrain_model():
     finally:
         conn.close()
 
-# Ejecutar la aplicación    
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)  
+    uvicorn.run(app, host="0.0.0.0", port=8000)
