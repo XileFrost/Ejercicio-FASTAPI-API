@@ -45,6 +45,12 @@ def init_db():
 
 init_db()
 
+try:
+    with open("./data/advertising_model.pkl", "rb") as model_file:
+        model = pickle.load(model_file)
+except FileNotFoundError:
+    model = None
+
 class PredictionInput(BaseModel):
     TV: float
     radio: float
@@ -58,10 +64,12 @@ class TrainingData(BaseModel):
 
 @app.post("/predict")
 async def predict(data: PredictionInput):
+    if model is None:
+        raise HTTPException(status_code=500, detail="Modelo no disponible")
     try:
         input_data = np.array([[data.TV, data.radio, data.newspaper]])
         prediction = model.predict(input_data)
-        return {"prediction": round(float(prediction[0]), 2}
+        return {"prediction": round(float(prediction[0]), 2)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
