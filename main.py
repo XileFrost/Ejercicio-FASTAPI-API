@@ -31,6 +31,7 @@ def init_db():
     
     if cursor.execute("SELECT COUNT(*) FROM advertising").fetchone()[0] == 0:
         df = pd.read_csv(CSV_PATH)
+        df = df.rename(columns={'newpaper': 'newspaper'})
         df['newspaper'] = df['newspaper'].astype(str).str.replace('s', '').astype(float)
         df[['TV', 'radio', 'newspaper', 'sales']].to_sql(
             'advertising',
@@ -60,7 +61,7 @@ async def predict(data: PredictionInput):
     try:
         input_data = np.array([[data.TV, data.radio, data.newspaper]])
         prediction = model.predict(input_data)
-        return {"prediction": round(float(prediction[0]), 2)}
+        return {"prediction": round(float(prediction[0]), 2}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
