@@ -9,7 +9,6 @@ import uvicorn
 
 app = FastAPI()
 
-# Configuración
 DATABASE_NAME = "advertising.db"
 CSV_PATH = "/app/data/Advertising.csv"
 
@@ -23,7 +22,7 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS advertising (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tv REAL NOT NULL,
+            TV REAL NOT NULL,
             radio REAL NOT NULL,
             newspaper REAL NOT NULL,
             sales REAL NOT NULL
@@ -32,10 +31,8 @@ def init_db():
     
     if cursor.execute("SELECT COUNT(*) FROM advertising").fetchone()[0] == 0:
         df = pd.read_csv(CSV_PATH)
-        df = df.rename(columns={'newpaper': 'newspaper'})
         df['newspaper'] = df['newspaper'].astype(str).str.replace('s', '').astype(float)
-        
-        df[['tv', 'radio', 'newspaper', 'sales']].to_sql(
+        df[['TV', 'radio', 'newspaper', 'sales']].to_sql(
             'advertising',
             conn,
             if_exists='append',
@@ -47,14 +44,13 @@ def init_db():
 
 init_db()
 
-# Modelos Pydantic
 class PredictionInput(BaseModel):
-    tv: float
+    TV: float
     radio: float
     newspaper: float
 
 class TrainingData(BaseModel):
-    tv: float
+    TV: float
     radio: float
     newspaper: float
     sales: float
@@ -62,7 +58,7 @@ class TrainingData(BaseModel):
 @app.post("/predict")
 async def predict(data: PredictionInput):
     try:
-        input_data = np.array([[data.tv, data.radio, data.newspaper]])
+        input_data = np.array([[data.TV, data.radio, data.newspaper]])
         prediction = model.predict(input_data)
         return {"prediction": round(float(prediction[0]), 2)}
     except Exception as e:
@@ -74,9 +70,9 @@ async def ingest_data(data: TrainingData):
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            INSERT INTO advertising (tv, radio, newspaper, sales)
+            INSERT INTO advertising (TV, radio, newspaper, sales)
             VALUES (?, ?, ?, ?)
-        ''', (data.tv, data.radio, data.newspaper, data.sales))
+        ''', (data.TV, data.radio, data.newspaper, data.sales))
         conn.commit()
         return {"message": "Datos ingresados correctamente"}
     except Exception as e:
@@ -89,20 +85,15 @@ async def ingest_data(data: TrainingData):
 async def retrain_model():
     conn = get_db()
     try:
-        df = pd.read_sql('SELECT tv, radio, newspaper, sales FROM advertising', conn)
-        
-        X = df[['tv', 'radio', 'newspaper']]
+        df = pd.read_sql('SELECT TV, radio, newspaper, sales FROM advertising', conn)
+        X = df[['TV', 'radio', 'newspaper']]
         y = df['sales']
-        
         new_model = LinearRegression()
         new_model.fit(X, y)
-        
         with open("./data/advertising_model.pkl", "wb") as model_file:
             pickle.dump(new_model, model_file)
-        
         global model
         model = new_model
-        
         return {"message": "Modelo reentrenado correctamente."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
