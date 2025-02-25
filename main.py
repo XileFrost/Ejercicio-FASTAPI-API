@@ -11,17 +11,11 @@ app = FastAPI()
 
 # Configuración
 DATABASE_NAME = "advertising.db"
-CSV_PATH = "/app/data/Advertising.csv"  # Ruta absoluta en Docker
+CSV_PATH = "/app/data/Advertising.csv"
 
-# Cargar modelo inicial
-with open("./data/advertising_model.pkl", "rb") as model_file:
-    model = pickle.load(model_file)
-
-# Conexión a la base de datos
 def get_db():
     return sqlite3.connect(DATABASE_NAME)
 
-# Inicializar base de datos (corregido para 'newpaper')
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
@@ -31,20 +25,16 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tv REAL NOT NULL,
             radio REAL NOT NULL,
-            newspaper REAL NOT NULL,  # Nombre correcto en DB
+            newspaper REAL NOT NULL,
             sales REAL NOT NULL
         )
     ''')
     
     if cursor.execute("SELECT COUNT(*) FROM advertising").fetchone()[0] == 0:
-        # Leo CSV y cambio nombre de columna
         df = pd.read_csv(CSV_PATH)
-        df = df.rename(columns={'newpaper': 'newspaper'}) 
-        
-        # Limpio dato erróneo (6s9.2 → 69.2)
+        df = df.rename(columns={'newpaper': 'newspaper'})
         df['newspaper'] = df['newspaper'].astype(str).str.replace('s', '').astype(float)
         
-        # Insertar datos
         df[['tv', 'radio', 'newspaper', 'sales']].to_sql(
             'advertising',
             conn,
@@ -69,7 +59,6 @@ class TrainingData(BaseModel):
     newspaper: float
     sales: float
 
-# Endpoints (igual que antes)
 @app.post("/predict")
 async def predict(data: PredictionInput):
     try:
