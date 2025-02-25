@@ -21,7 +21,7 @@ with open("./data/advertising_model.pkl", "rb") as model_file:
 def get_db():
     return sqlite3.connect(DATABASE_NAME)
 
-# Inicializar base de datos y cargar CSV
+# Inicializar base de datos
 def init_db():
     conn = get_db()
     cursor = conn.cursor()
@@ -52,14 +52,14 @@ def init_db():
 
 init_db()
 
-# Modelos Pydantic para los tests
+# Modelos Pydantic
 class IngestRequest(BaseModel):
-    data: list
+    data: list[list[float]]
 
 class PredictRequest(BaseModel):
-    data: list
+    data: list[list[float]]
 
-# Endpoints ajustados para los tests
+# Endpoints
 @app.post("/ingest")
 async def ingest_data(request: IngestRequest):
     conn = get_db()
@@ -67,12 +67,12 @@ async def ingest_data(request: IngestRequest):
     try:
         for entry in request.data:
             if len(entry) != 4:
-                raise HTTPException(status_code=400, detail="Formato de datos incorrecto")
+                raise HTTPException(status_code=400, detail="Formato incorrecto")
                 
             cursor.execute('''
                 INSERT INTO advertising (tv, radio, newspaper, sales)
                 VALUES (?, ?, ?, ?)
-            ''', (entry[0], entry[1], entry[2], entry[3]))
+            ''', tuple(entry))
         
         conn.commit()
         return {"message": "Datos ingresados correctamente"}
@@ -85,7 +85,7 @@ async def ingest_data(request: IngestRequest):
 @app.post("/predict")
 async def predict(request: PredictRequest):
     try:
-        input_data = np.array(request.data).astype(float)
+        input_data = np.array(request.data)
         predictions = model.predict(input_data)
         return {"prediction": [round(float(p), 2) for p in predictions]}
     except Exception as e:
